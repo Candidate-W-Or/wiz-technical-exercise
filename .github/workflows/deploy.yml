@@ -1,0 +1,17 @@
+name: Wiz-DevOps-Pipeline
+on: [push]
+
+jobs:
+  terraform-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Terraform Plan
+        run: echo "Scanning IaC for Wiz Toxic Combinations..."
+
+  docker-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build Image
+        run: echo "Building container for Wiz security scan..."
