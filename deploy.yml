@@ -1,0 +1,22 @@
+name: Wiz-DevOps-Pipeline
+on: [push]
+
+jobs:
+  # Pipeline 1: Securely deploy Cloud Infrastructure
+  terraform-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Terraform Plan
+        run: |
+          terraform init
+          terraform plan # This is where 'Shift-Left' scanning happens
+
+  # Pipeline 2: Build & Push Containerized App
+  docker-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build Image
+        run: docker build -t wiz-app:latest .
+      # In prod, we would add: docker push myregistry.azurecr.io/wiz-app:latest
