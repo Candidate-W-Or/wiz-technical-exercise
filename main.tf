@@ -1,17 +1,201 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+  }
+}
+
+provider "azurerm" {
+  features {}
+  # NOTE: In GitHub Actions, authentication is handled via Environment Variables (ARM_CLIENT_ID, etc.)
+  # You do not need to hardcode subscription IDs or credentials here.
+}
+
+# 1. Resource Group
 resource "azurerm_resource_group" "wiz" {
   name     = "Wiz-Assignment"
   location = "East US"
 }
 
+# 2. Networking
+# [cite_start]Requirement: Public Subnet for VM [cite: 30][cite_start], Private Subnet for K8s [cite: 34]
+resource "azurerm_virtual_network" "wiz_vnet" {
+  name                = "wiz-vnet"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.wiz.location
+  resource_group_name = azurerm_resource_group.wiz.name
+}
+
+resource "azurerm_subnet" "public_subnet" {
+  name                 = "public-subnet"
+  resource_group_name  = azurerm_resource_group.wiz.name
+  virtual_network_name = azurerm_virtual_network.wiz_vnet.name
+  address_prefixes     = ["10.0.1.0/24"]
+}
+
+resource "azurerm_subnet" "private_subnet" {
+  name                 = "private-subnet"
+  resource_group_name  = azurerm_resource_group.wiz.name
+  virtual_network_name = azurerm_virtual_network.wiz_vnet.name
+  address_prefixes     = ["10.0.2.0/24"]
+}
+
+# 3. Insecure Security Group
+# [cite_start]Requirement: Allow SSH from Internet[cite: 53], Allow DB connections
+resource "azurerm_network_security_group" "wiz_nsg" {
+  name                = "wiz-insecure-nsg"
+  location            = azurerm_resource_group.wiz.location
+  resource_group_name = azurerm_resource_group.wiz.name
+
+  # TRAP 1: Open SSH to the world (0.0.0.0/0)
+  security_rule {
+    name                       = "AllowSSH"
+    priority                   = 1001
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  # TRAP 2: Open MongoDB to the world (Required for K8s connection in this architecture)
+  security_rule {
+    name                       = "AllowMongo"
+    priority                   = 1002
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "27017"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+# 4. Storage Account (Public & Vulnerable)
+# [cite_start]Requirement: Cloud object storage configured as anonymous public readable [cite: 42]
+resource "random_id" "storage_id" {
+  byte_length = 4
+}
+
+resource "azurerm_storage_account" "wiz_storage" {
+  name                     = "wizbackup${random_id.storage_id.hex}" # Must be globally unique
+  resource_group_name      = azurerm_resource_group.wiz.name
+  location                 = azurerm_resource_group.wiz.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  
+  # The Risk: Explicitly enabling public access
+  allow_blob_public_access = true
+}
+
+resource "azurerm_storage_container" "wiz_backups" {
+  name                  = "db-backups"
+  storage_account_name  = azurerm_storage_account.wiz_storage.name
+  container_access_type = "container" # Allows public anonymous read access
+}
+
+# 5. Database Virtual Machine
+# [cite_start]Requirement: VM in Public Subnet [cite: 41][cite_start], Outdated Linux [cite: 52]
+resource "azurerm_public_ip" "vm_ip" {
+  name                = "wiz-vm-ip"
+  location            = azurerm_resource_group.wiz.location
+  resource_group_name = azurerm_resource_group.wiz.name
+  allocation_method   = "Dynamic"
+}
+
+resource "azurerm_network_interface" "vm_nic" {
+  name                = "wiz-vm-nic"
+  location            = azurerm_resource_group.wiz.location
+  resource_group_name = azurerm_resource_group.wiz.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.public_subnet.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.vm_ip.id
+  }
+}
+
+resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
+  network_interface_id      = azurerm_network_interface.vm_nic.id
+  network_security_group_id = azurerm_network_security_group.wiz_nsg.id
+}
+
+resource "azurerm_linux_virtual_machine" "wiz_vm" {
+  name                = "wiz-mongo-vm"
+  resource_group_name = azurerm_resource_group.wiz.name
+  location            = azurerm_resource_group.wiz.location
+  size                = "Standard_B1s"
+  
+  # AUTHENTICATION CONFIGURATION (As requested)
+  admin_username                  = "azureuser"
+  disable_password_authentication = false
+  admin_password                  = "WizExercise2024!" # Vulnerability: Weak/Shared password
+
+  network_interface_ids = [
+    azurerm_network_interface.vm_nic.id,
+  ]
+
+  # [cite_start]Using Ubuntu 18.04 to satisfy "Outdated Linux" requirement [cite: 52]
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "UbuntuServer"
+    sku       = "18.04-LTS"
+    version   = "latest"
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  # Managed Identity: Allows VM to upload backups to Storage
+  identity {
+    type = "SystemAssigned"
+  }
+
+  # Cloud-Init Script: Installs MongoDB and sets up backup cron job
+  custom_data = filebase64("${path.module}/mongo-setup.sh")
+}
+
+# 6. IAM Role Assignment
+# [cite_start]Requirement: Grant permission for VM to write to Storage [cite: 56]
+resource "azurerm_role_assignment" "vm_blob_contributor" {
+  scope                = azurerm_storage_account.wiz_storage.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_linux_virtual_machine.wiz_vm.identity[0].principal_id
+}
+
+# 7. Kubernetes Cluster
+# [cite_start]Requirement: AKS Cluster in Private Subnet [cite: 33]
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = "wiz-web-aks"
-  location            = "East US"
-  resource_group_name = "Wiz-Assignment"
+  location            = azurerm_resource_group.wiz.location
+  resource_group_name = azurerm_resource_group.wiz.name
   dns_prefix          = "wizaks"
+
   default_node_pool {
-    name       = "default"
-    node_count = 1
-    vm_size    = "Standard_D2s_v5"
+    name           = "default"
+    node_count     = 1
+    vm_size        = "Standard_D2s_v5"
+    vnet_subnet_id = azurerm_subnet.private_subnet.id
   }
-  identity { type = "SystemAssigned" }
+
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+# Output Public IP for verification
+output "vm_public_ip" {
+  value = azurerm_public_ip.vm_ip.ip_address
 }
