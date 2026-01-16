@@ -1,4 +1,4 @@
-terraform {
+ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -164,8 +164,10 @@ resource "azurerm_linux_virtual_machine" "wiz_vm" {
   }
 
   # Cloud-Init Script: Installs MongoDB and sets up backup cron job
-  custom_data = filebase64("${path.module}/mongo-setup.sh")
-}
+custom_data = base64encode(templatefile("${path.module}/mongo-setup.sh", {
+    storage_account_name = azurerm_storage_account.wiz_storage.name
+    container_name       = azurerm_storage_container.wiz_backups.name
+  }))
 
 # 6. IAM Role Assignment
 # [cite_start]Requirement: Grant permission for VM to write to Storage [cite: 56]
