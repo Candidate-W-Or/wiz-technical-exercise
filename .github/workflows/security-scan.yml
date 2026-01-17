@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# FIXED: Permissions block added
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 jobs:
   microsoft-security-devops:
     runs-on: ubuntu-latest
@@ -17,10 +23,9 @@ jobs:
         uses: microsoft/security-devops-action@v1
         id: msdo
         with:
-          # This will scan for Infrastructure as Code (Terraform) issues
-          tools: ' terrascan, trivy, checkov' 
+          tools: 'checkov, terrascan, trivy'
 
       - name: Upload Alert Results to GitHub
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3  # FIXED: v3
         with:
           sarif_file: ${{ steps.msdo.outputs.sarifFile }}
