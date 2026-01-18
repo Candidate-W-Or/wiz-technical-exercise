@@ -2,9 +2,8 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-# OLD      version = "~> 3.0"
-# NEW: (Force it to use this specific older version)
-      version = "=3.100.0
+      # FIXED: Added the missing closing quote below
+      version = "=3.100.0"
     }
   }
 }
@@ -15,13 +14,13 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
-  # ... other provider configuration ...
 }
 
 # 1. Resource Group
 resource "azurerm_resource_group" "wiz" {
   name     = "Wiz-Assignment"
-  location = "East US"
+  # FIXED: Changed from "East US" to match your actual Azure location
+  location = "israelcentral"
 }
 
 # 2. Networking (VNET + Subnets)
@@ -81,18 +80,18 @@ resource "azurerm_network_security_group" "wiz_nsg" {
 
 # 4. Storage Account (Public Backups)
 resource "azurerm_storage_account" "wiz_storage" {
-  name                     = "wizbackups01"  # YOUR CUSTOM NAME
+  name                     = "wizbackups01"
   resource_group_name      = azurerm_resource_group.wiz.name
   location                 = azurerm_resource_group.wiz.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
-  allow_blob_public_access = true # The Vulnerability
+  allow_blob_public_access = true 
 }
 
 resource "azurerm_storage_container" "wiz_backups" {
   name                  = "db-backups"
   storage_account_name  = azurerm_storage_account.wiz_storage.name
-  container_access_type = "container" # Public Anonymous Read
+  container_access_type = "container"
 }
 
 # 5. Database VM (The "Outdated" Server)
@@ -122,12 +121,11 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
 }
 
 resource "azurerm_linux_virtual_machine" "wiz_vm" {
-  name                = "mongoDB-outdated-18.04" # YOUR CUSTOM VM NAME
+  name                = "mongoDB-outdated-18.04"
   resource_group_name = azurerm_resource_group.wiz.name
   location            = azurerm_resource_group.wiz.location
   size                = "Standard_B1s"
-  
-  # YOUR CUSTOM CREDENTIALS
+   
   admin_username                  = "mongoadmin"
   disable_password_authentication = false
   admin_password                  = "WizExercise2026!"
@@ -148,7 +146,6 @@ resource "azurerm_linux_virtual_machine" "wiz_vm" {
 
   identity { type = "SystemAssigned" }
 
-  # INJECT THE SETUP SCRIPT
   custom_data = base64encode(templatefile("${path.module}/mongo-setup.sh", {
     storage_account_name = azurerm_storage_account.wiz_storage.name
     container_name       = azurerm_storage_container.wiz_backups.name
@@ -170,9 +167,9 @@ resource "azurerm_kubernetes_cluster" "aks" {
   dns_prefix          = "wizaks"
 
   default_node_pool {
-    name           = "default"
-    node_count     = 1
-    vm_size        = "Standard_D2s_v5"
+    name       = "default"
+    node_count = 1
+    vm_size    = "Standard_D2s_v5"
     vnet_subnet_id = azurerm_subnet.private_subnet.id
   }
   identity { type = "SystemAssigned" }
