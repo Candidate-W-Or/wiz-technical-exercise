@@ -121,9 +121,9 @@ resource "azurerm_linux_virtual_machine" "wiz_vm" {
   size                = "Standard_B1s"
   
   # YOUR CUSTOM CREDENTIALS
-  admin_username                  = "Candidate-W-Or"
+  admin_username                  = "mongoadmin"
   disable_password_authentication = false
-  admin_password                  = "WizExercise2024!"
+  admin_password                  = "WizExercise2026!"
 
   network_interface_ids = [ azurerm_network_interface.vm_nic.id ]
 
