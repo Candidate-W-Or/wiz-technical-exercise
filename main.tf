@@ -2,7 +2,8 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "=3.0"
+      # FIXED: Using flexible version to ensure support for Israel region
+      version = "~> 3.0"
     }
   }
 }
@@ -18,7 +19,6 @@ provider "azurerm" {
 # 1. Resource Group
 resource "azurerm_resource_group" "wiz" {
   name     = "Wiz-Assignment"
-  # FIXED: Changed from "East US" to match your actual Azure location
   location = "israelcentral"
 }
 
@@ -166,12 +166,22 @@ resource "azurerm_kubernetes_cluster" "aks" {
   dns_prefix          = "wizaks"
 
   default_node_pool {
-    name       = "default"
-    node_count = 1
-    vm_size    = "Standard_D2s_v5"
+    name           = "default"
+    node_count     = 1
+    vm_size        = "Standard_D2s_v5"
     vnet_subnet_id = azurerm_subnet.private_subnet.id
   }
+  
   identity { type = "SystemAssigned" }
+
+  # --- FIXED: Network Profile to avoid CIDR overlap ---
+  network_profile {
+    network_plugin    = "kubenet"
+    load_balancer_sku = "standard"
+    service_cidr      = "172.16.0.0/16"
+    dns_service_ip    = "172.16.0.10"
+    pod_cidr          = "172.17.0.0/16"
+  }
 }
 
 output "vm_public_ip" {
