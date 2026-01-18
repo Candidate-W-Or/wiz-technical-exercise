@@ -2,8 +2,8 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      # FIXED: Added the missing closing quote below
-      version = "=3.100.0"
+      
+      version = "=3.0"
     }
   }
 }
