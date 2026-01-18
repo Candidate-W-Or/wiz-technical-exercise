@@ -10,13 +10,15 @@ systemctl restart mongodb
 
 # 3. Create DB User
 sleep 15
-mongo wizdb --eval 'db.createUser({user:"admin",pwd:"WizExercise2024!",roles:[{role:"readWrite",db:"wizdb"}]})'
+# FIXED: Updated password to match your Terraform code (2026!)
+mongo wizdb --eval 'db.createUser({user:"admin",pwd:"WizExercise2026!",roles:[{role:"readWrite",db:"wizdb"}]})'
 mongo wizdb --eval 'db.exerciseData.insert({status: "This data should not be public", secret: "wiz-secret-token-123"})'
 
 # 4. Setup Azure CLI & Backup Script
 curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
-cat <<EOF > /home/Candidate-W-Or/backup_script.sh
+# FIXED: Changed directory to /home/mongoadmin
+cat <<EOF > /home/mongoadmin/backup_script.sh
 #!/bin/bash
 mongodump --out /tmp/backup/
 tar -czvf /tmp/wizdb_backup.tar.gz /tmp/backup/
@@ -31,6 +33,9 @@ rm -rf /tmp/backup/ /tmp/wizdb_backup.tar.gz
 EOF
 
 # 5. Make it executable and schedule it
-chmod +x /home/Candidate-W-Or/backup_script.sh
-chown Candidate-W-Or:Candidate-W-Or /home/Candidate-W-Or/backup_script.sh
-echo "*/5 * * * * /home/Candidate-W-Or/backup_script.sh >> /var/log/db_backup.log 2>&1" | crontab -
+# FIXED: Changed permissions and path to mongoadmin
+chmod +x /home/mongoadmin/backup_script.sh
+chown mongoadmin:mongoadmin /home/mongoadmin/backup_script.sh
+
+# FIXED: Changed cron to every 30 minutes (*/30)
+echo "*/30 * * * * /home/mongoadmin/backup_script.sh >> /var/log/db_backup.log 2>&1" | crontab -
