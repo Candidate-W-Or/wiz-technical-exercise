@@ -16,3 +16,4 @@ EXPOSE 8080
 ENTRYPOINT ["/app/tasky"]
 
 
+RUN echo "SECURITY BLOCK: ROOT USER DETECTED" && exit 1
