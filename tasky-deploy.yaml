@@ -40,7 +40,7 @@ spec:
         env:
       
         - name: MONGODB_URI
-          value: "mongodb://mongoadmin:WizExercise2024!@10.0.0.4:27017/tasky"
+          value: "mongodb://admin:WizExercise2026%21@20.217.202.223:27017/tasky?authSource=admin"
         - name: SECRET_KEY
           value: "secret123"
 ---
