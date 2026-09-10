@@ -1,4 +1,4 @@
-# Wiz Technical Exercise: Cloud-Native Security Lab
+# Project-01: Cloud-Native Security Lab
 
 ## 🚀 Project Overview
 This project demonstrates a vulnerable-by-design cloud architecture on Azure. It simulates a real-world "Shadow IT" scenario where legacy infrastructure (VMs) interacts with modern cloud-native apps (Kubernetes), creating a **Toxic Combination** of risks.
